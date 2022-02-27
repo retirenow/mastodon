@@ -73,7 +73,7 @@ zh-TW:
       imports:
         data: 從其他 Mastodon 伺服器匯出的 CSV 檔案
       invite_request:
-        text: 這會協助我們審核您的應用程式
+        text: 請簡要描述你想要加入本站的理由，加班多和擅長寫社畜傷痛文學會優先通過
       ip_block:
         comment: 可選的，但請記得您為何添加這項規則。
         expires_in: IP 位址是經常共用或轉手的有限資源，不建議無限期地封鎖特定 IP 位址。
