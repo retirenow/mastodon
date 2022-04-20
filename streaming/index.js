@@ -630,6 +630,20 @@ const startWorker = async (workerId) => {
         output(event, encodedPayload);
       };
 
+      if (notificationOnly && event !== 'notification') {
+        return;
+      }
+
+      if (event === 'notification' && !req.allowNotifications) {
+        return;
+      }
+
+      // Only send local-only statuses to logged-in users
+      if (payload.local_only && !req.accountId) {
+        log.silly(req.requestId, `Message ${payload.id} filtered because it was local-only`);
+        return;
+      }
+
       // Only messages that may require filtering are statuses, since notifications
       // are already personalized and deletes do not matter
       if (!needsFiltering || event !== 'update') {

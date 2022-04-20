@@ -459,6 +459,7 @@
   "status.history.created": "{name} ha creat {date}",
   "status.history.edited": "{name} ha editat {date}",
   "status.load_more": "Carrega més",
+  "status.local_only": "This post is only visible by other users of your instance",
   "status.media_hidden": "Multimèdia amagat",
   "status.mention": "Esmentar @{name}",
   "status.more": "Més",
