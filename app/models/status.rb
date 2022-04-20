@@ -23,6 +23,7 @@
 #  in_reply_to_account_id       :bigint(8)
 #  poll_id                      :bigint(8)
 #  deleted_at                   :datetime
+#  local_only                   :boolean
 #  edited_at                    :datetime
 #  trendable                    :boolean
 #  ordered_media_attachment_ids :bigint(8)        is an Array
@@ -93,6 +94,7 @@ class Status < ApplicationRecord
   scope :with_accounts, ->(ids) { where(id: ids).includes(:account) }
   scope :without_replies, -> { where('statuses.reply = FALSE OR statuses.in_reply_to_account_id = statuses.account_id') }
   scope :without_reblogs, -> { where('statuses.reblog_of_id IS NULL') }
+  scope :without_local_only, -> { where(local_only: [false, nil]) }
   scope :with_public_visibility, -> { where(visibility: :public) }
   scope :tagged_with, ->(tag_ids) { joins(:statuses_tags).where(statuses_tags: { tag_id: tag_ids }) }
   scope :in_chosen_languages, ->(account) { where(language: nil).or where(language: account.chosen_languages) }
@@ -170,6 +172,10 @@ class Status < ApplicationRecord
 
   def local?
     attributes['local'] || uri.nil?
+  end
+
+  def local_only?
+    local_only
   end
 
   def in_reply_to_local_account?
@@ -300,6 +306,8 @@ class Status < ApplicationRecord
 
   around_create Mastodon::Snowflake::Callbacks
 
+  before_create :set_locality
+
   before_validation :prepare_contents, if: :local?
   before_validation :set_reblog
   before_validation :set_visibility
@@ -350,6 +358,28 @@ class Status < ApplicationRecord
       cached_items.each do |item|
         item.account = accounts[item.account_id]
         item.reblog.account = accounts[item.reblog.account_id] if item.reblog?
+      end
+    end
+
+    def permitted_for(target_account, account)
+      visibility = [:public, :unlisted]
+
+      if account.nil?
+        where(visibility: visibility).without_local_only
+      elsif target_account.blocking?(account) || (account.domain.present? && target_account.domain_blocking?(account.domain)) # get rid of blocked peeps
+        none
+      elsif account.id == target_account.id # author can see own stuff
+        all
+      else
+        # followers can see followers-only stuff, but also things they are mentioned in.
+        # non-followers can see everything that isn't private/direct, but can see stuff they are mentioned in.
+        visibility.push(:private) if account.following?(target_account)
+
+        scope = left_outer_joins(:reblog)
+
+        scope.where(visibility: visibility)
+             .or(scope.where(id: account.mentions.select(:status_id)))
+             .merge(scope.where(reblog_of_id: nil).or(scope.where.not(reblogs_statuses: { account_id: account.excluded_from_timeline_account_ids })))
       end
     end
 
@@ -484,6 +514,10 @@ class Status < ApplicationRecord
 
   def set_local
     self.local = account.local?
+  end
+
+  def set_locality
+    self.local_only = reblog.local_only if reblog?
   end
 
   def update_statistics
