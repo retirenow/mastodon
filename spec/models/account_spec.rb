@@ -617,8 +617,8 @@ RSpec.describe Account, type: :model do
         expect(account).to model_have_error_on_field(:username)
       end
 
-      it 'is invalid if the display name is longer than 30 characters' do
-        account = Fabricate.build(:account, display_name: Faker::Lorem.characters(number: 31))
+      it 'is invalid if the display name is longer than 60 characters' do
+        account = Fabricate.build(:account, display_name: Faker::Lorem.characters(number: 61))
         account.valid?
         expect(account).to model_have_error_on_field(:display_name)
       end
