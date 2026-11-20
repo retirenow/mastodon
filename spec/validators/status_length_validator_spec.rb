@@ -5,9 +5,21 @@ require 'rails_helper'
 RSpec.describe StatusLengthValidator do
   subject { Fabricate.build :status }
 
-  before { stub_const 'StatusLengthValidator::MAX_CHARS', 100 }
+  before do
+    stub_const 'StatusLengthValidator::MAX_CHARS', 100 unless RSpec.current_example.metadata[:configured_limit]
+  end
 
   let(:over_limit_text) { 'a' * described_class::MAX_CHARS * 2 }
+
+  context 'with the configured character limit' do
+    it 'allows exactly 5000 grapheme clusters', :configured_limit do
+      expect(subject).to allow_value('✨' * 5000).for(:text)
+    end
+
+    it 'rejects 5001 grapheme clusters', :configured_limit do
+      expect(subject).to_not allow_value('✨' * 5001).for(:text).with_message(too_long_message)
+    end
+  end
 
   context 'when status is remote' do
     before { subject.update! account: Fabricate(:account, domain: 'host.example') }

@@ -66,7 +66,7 @@ RSpec.describe 'Instances' do
       include(
         configuration: include(
           accounts: include(
-            max_display_name_length: Account::DISPLAY_NAME_LENGTH_LIMIT,
+            max_display_name_length: 60,
             max_note_length: Account::NOTE_LENGTH_LIMIT,
             max_avatar_description_length: Account::Avatar::MAX_DESCRIPTION_LENGTH,
             max_header_description_length: Account::Header::MAX_DESCRIPTION_LENGTH,
@@ -77,14 +77,14 @@ RSpec.describe 'Instances' do
             profile_field_value_limit: Account::Field::MAX_CHARACTERS_LOCAL
           ),
           statuses: include(
-            max_characters: StatusLengthValidator::MAX_CHARS,
+            max_characters: 5000,
             max_media_attachments: Status::MEDIA_ATTACHMENTS_LIMIT
           ),
           media_attachments: include(
             description_limit: MediaAttachment::MAX_DESCRIPTION_LENGTH
           ),
           polls: include(
-            max_options: PollOptionsValidator::MAX_OPTIONS
+            max_options: 32
           )
         )
       )
