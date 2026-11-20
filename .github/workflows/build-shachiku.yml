@@ -1,0 +1,186 @@
+name: Build Shachiku images
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_number:
+        description: Immutable shachiku build number
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shachiku-v4.7.5-${{ inputs.build_number }}
+  cancel-in-progress: false
+
+env:
+  APP_IMAGE: docker.io/retirenow/mastodon
+  STREAMING_IMAGE: docker.io/retirenow/mastodon-streaming
+  IMAGE_TAG: v4.7.5-shachiku.${{ inputs.build_number }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:14-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10ms
+          --health-timeout 3s
+          --health-retries 50
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10ms
+          --health-timeout 3s
+          --health-retries 50
+        ports:
+          - 6379:6379
+
+    env:
+      DB_HOST: localhost
+      DB_USER: postgres
+      DB_PASS: postgres
+      RAILS_ENV: test
+      BUNDLE_WITH: test
+
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Validate build number
+        env:
+          BUILD_NUMBER: ${{ inputs.build_number }}
+        run: |
+          [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]]
+
+      - name: Set up Ruby environment
+        uses: ./.github/actions/setup-ruby
+
+      - name: Set up Javascript environment
+        uses: ./.github/actions/setup-javascript
+
+      - name: Prepare test database
+        run: bin/rails db:setup
+
+      - name: Run customization specs
+        run: >-
+          bin/rspec
+          spec/validators/status_length_validator_spec.rb
+          spec/validators/poll_options_validator_spec.rb
+          spec/models/account_spec.rb
+          spec/requests/api/v2/instance_spec.rb
+
+      - name: Check locale normalization
+        run: bin/i18n-tasks check-normalized
+
+      - name: Check locale JSON formatting
+        run: yarn prettier --check app/javascript/mastodon/locales/{en,zh-CN,zh-HK,zh-TW}.json
+
+  preflight:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Refuse to overwrite immutable tags
+        run: |
+          if docker buildx imagetools inspect "$APP_IMAGE:$IMAGE_TAG" >/dev/null 2>&1; then
+            echo "::error::$APP_IMAGE:$IMAGE_TAG already exists"
+            exit 1
+          fi
+
+          if docker buildx imagetools inspect "$STREAMING_IMAGE:$IMAGE_TAG" >/dev/null 2>&1; then
+            echo "::error::$STREAMING_IMAGE:$IMAGE_TAG already exists"
+            exit 1
+          fi
+
+  build-app:
+    needs: preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push application image
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: ${{ env.APP_IMAGE }}:${{ env.IMAGE_TAG }}
+          build-args: |
+            MASTODON_VERSION_METADATA=shachiku.${{ inputs.build_number }}
+            SOURCE_COMMIT=${{ github.sha }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ env.IMAGE_TAG }}
+          cache-from: type=gha,scope=shachiku-app
+          cache-to: type=gha,mode=max,scope=shachiku-app
+
+      - name: Record application digest
+        run: echo "$APP_IMAGE:$IMAGE_TAG@${{ steps.build.outputs.digest }}"
+
+  build-streaming:
+    needs: preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Streaming image
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: streaming/Dockerfile
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: ${{ env.STREAMING_IMAGE }}:${{ env.IMAGE_TAG }}
+          build-args: |
+            MASTODON_VERSION_METADATA=shachiku.${{ inputs.build_number }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ env.IMAGE_TAG }}
+          cache-from: type=gha,scope=shachiku-streaming
+          cache-to: type=gha,mode=max,scope=shachiku-streaming
+
+      - name: Record Streaming digest
+        run: echo "$STREAMING_IMAGE:$IMAGE_TAG@${{ steps.build.outputs.digest }}"
