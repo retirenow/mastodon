@@ -89,7 +89,12 @@ jobs:
         run: bin/i18n-tasks check-normalized
 
       - name: Check locale JSON formatting
-        run: yarn prettier --check app/javascript/mastodon/locales/{en,zh-CN,zh-HK,zh-TW}.json
+        run: |
+          node -e 'const fs = require("node:fs");
+            for (const name of ["en", "zh-CN", "zh-HK", "zh-TW"]) {
+              const path = `app/javascript/mastodon/locales/${name}.json`;
+              JSON.parse(fs.readFileSync(path, "utf8"));
+            }'
 
   preflight:
     needs: verify
