@@ -9,6 +9,16 @@ RSpec.describe PollOptionsValidator do
     it { is_expected.to allow_values(%w(One Two)).for(:options) }
   end
 
+  context 'with the configured option limit' do
+    it 'allows exactly 32 options' do
+      expect(subject).to allow_value(Array.new(32) { |index| "Option #{index}" }).for(:options)
+    end
+
+    it 'rejects 33 options' do
+      expect(subject).to_not allow_value(Array.new(33) { |index| "Option #{index}" }).for(:options).with_message(I18n.t('polls.errors.too_many_options', max: 32))
+    end
+  end
+
   context 'when poll has too few options' do
     it { is_expected.to_not allow_values([]).for(:options).with_message(I18n.t('polls.errors.too_few_options')) }
   end

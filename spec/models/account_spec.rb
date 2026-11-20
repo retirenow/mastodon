@@ -545,6 +545,9 @@ RSpec.describe Account do
       it { is_expected.to validate_length_of(:username).is_at_most(described_class::USERNAME_LENGTH_LIMIT) }
       it { is_expected.to validate_length_of(:display_name).is_at_most(described_class::DISPLAY_NAME_LENGTH_LIMIT) }
 
+      it { is_expected.to allow_value('✨' * 60).for(:display_name) }
+      it { is_expected.to_not allow_value('✨' * 61).for(:display_name) }
+
       it { is_expected.to_not allow_values(account_note_over_limit).for(:note) }
 
       it { is_expected.to validate_absence_of(:inbox_url, :followers_url, :shared_inbox_url, :uri).on(:create) }
