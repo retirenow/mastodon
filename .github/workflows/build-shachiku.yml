@@ -3,7 +3,7 @@ name: Build Shachiku images
 on:
   push:
     branches:
-      - shachiku-v4.7.5
+      - shachiku-v4.7.6
   workflow_dispatch:
     inputs:
       build_number:
@@ -15,13 +15,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: shachiku-v4.7.5-${{ github.event_name == 'workflow_dispatch' && inputs.build_number || '1' }}
+  group: shachiku-v4.7.6-${{ github.event_name == 'workflow_dispatch' && inputs.build_number || '1' }}
   cancel-in-progress: false
 
 env:
   APP_IMAGE: docker.io/retirenow/mastodon
   STREAMING_IMAGE: docker.io/retirenow/mastodon-streaming
-  IMAGE_TAG: v4.7.5-shachiku.${{ github.event_name == 'workflow_dispatch' && inputs.build_number || '1' }}
+  IMAGE_TAG: v4.7.6-shachiku.${{ github.event_name == 'workflow_dispatch' && inputs.build_number || '1' }}
 
 jobs:
   verify:
