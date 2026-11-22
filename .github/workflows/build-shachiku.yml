@@ -5,23 +5,18 @@ on:
     branches:
       - shachiku-v4.7.6
   workflow_dispatch:
-    inputs:
-      build_number:
-        description: Immutable shachiku build number
-        required: true
-        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: shachiku-v4.7.6-${{ github.event_name == 'workflow_dispatch' && inputs.build_number || '1' }}
+  group: shachiku-v4.7.6-${{ github.run_number }}
   cancel-in-progress: false
 
 env:
   APP_IMAGE: docker.io/retirenow/mastodon
   STREAMING_IMAGE: docker.io/retirenow/mastodon-streaming
-  IMAGE_TAG: v4.7.6-shachiku.${{ github.event_name == 'workflow_dispatch' && inputs.build_number || '1' }}
+  IMAGE_TAG: v4.7.6-shachiku.${{ github.run_number }}
 
 jobs:
   verify:
@@ -64,7 +59,7 @@ jobs:
 
       - name: Validate build number
         env:
-          BUILD_NUMBER: ${{ github.event_name == 'workflow_dispatch' && inputs.build_number || '1' }}
+          BUILD_NUMBER: ${{ github.run_number }}
         run: |
           [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]]
 
@@ -143,7 +138,7 @@ jobs:
           provenance: false
           tags: ${{ env.APP_IMAGE }}:${{ env.IMAGE_TAG }}
           build-args: |
-            MASTODON_VERSION_METADATA=shachiku.${{ github.event_name == 'workflow_dispatch' && inputs.build_number || '1' }}
+            MASTODON_VERSION_METADATA=shachiku.${{ github.run_number }}
             SOURCE_COMMIT=${{ github.sha }}
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
@@ -182,7 +177,7 @@ jobs:
           provenance: false
           tags: ${{ env.STREAMING_IMAGE }}:${{ env.IMAGE_TAG }}
           build-args: |
-            MASTODON_VERSION_METADATA=shachiku.${{ github.event_name == 'workflow_dispatch' && inputs.build_number || '1' }}
+            MASTODON_VERSION_METADATA=shachiku.${{ github.run_number }}
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
